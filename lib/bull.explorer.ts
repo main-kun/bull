@@ -4,12 +4,13 @@ import { Injector } from '@nestjs/core/injector/injector';
 import { InstanceWrapper } from '@nestjs/core/injector/instance-wrapper';
 import { Module } from '@nestjs/core/injector/module';
 import { MetadataScanner } from '@nestjs/core/metadata-scanner';
-import { Job, ProcessCallbackFunction, Queue } from 'bull';
+import { Job, Processor, Queue } from 'bullmq';
 import { BullMetadataAccessor } from './bull-metadata.accessor';
 import { NO_QUEUE_FOUND } from './bull.messages';
 import { BullQueueEventOptions } from './bull.types';
-import { ProcessOptions } from './decorators';
+import { BullWorkerOptions } from './decorators';
 import { getQueueToken } from './utils';
+import { BullWorkerStore } from './bull-worker.store';
 
 @Injectable()
 export class BullExplorer implements OnModuleInit {
@@ -21,13 +22,14 @@ export class BullExplorer implements OnModuleInit {
     private readonly discoveryService: DiscoveryService,
     private readonly metadataAccessor: BullMetadataAccessor,
     private readonly metadataScanner: MetadataScanner,
+    private readonly bullWorkerStore: BullWorkerStore,
   ) {}
 
-  onModuleInit() {
+  onModuleInit(): void {
     this.explore();
   }
 
-  explore() {
+  explore(): void {
     const providers: InstanceWrapper[] = this.discoveryService
       .getProviders()
       .filter((wrapper: InstanceWrapper) =>
@@ -55,6 +57,7 @@ export class BullExplorer implements OnModuleInit {
             this.handleProcessor(
               instance,
               key,
+              metatype.name,
               bullQueue,
               wrapper.host,
               isRequestScoped,
@@ -83,20 +86,15 @@ export class BullExplorer implements OnModuleInit {
   handleProcessor(
     instance: object,
     key: string,
+    className: string,
     queue: Queue,
     moduleRef: Module,
     isRequestScoped: boolean,
-    options?: ProcessOptions,
-  ) {
-    let args: unknown[] = [
-      options && options.name,
-      options && options.concurrency,
-    ];
-
+    options?: BullWorkerOptions,
+  ): void {
+    let callback: Processor;
     if (isRequestScoped) {
-      const callback: ProcessCallbackFunction<unknown> = async (
-        ...args: unknown[]
-      ) => {
+      callback = async (...args: unknown[]) => {
         const contextId = createContextId();
         const contextInstance = await this.injector.loadPerContext(
           instance,
@@ -106,14 +104,18 @@ export class BullExplorer implements OnModuleInit {
         );
         return contextInstance[key].call(contextInstance, ...args);
       };
-      args.push(callback);
     } else {
-      args.push(
-        instance[key].bind(instance) as ProcessCallbackFunction<unknown>,
-      );
+      callback = instance[key].bind(instance);
     }
-    args = args.filter(item => item !== undefined);
-    queue.process.call(queue, ...args);
+    const sharedOptions = {
+      connection: queue.opts.connection,
+      client: queue.opts.client,
+      prefix: queue.opts.prefix,
+    };
+    this.bullWorkerStore.addWorker(className, key, queue.name, callback, {
+      ...sharedOptions,
+      ...options,
+    });
   }
 
   handleListener(

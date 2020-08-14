@@ -1,38 +1,14 @@
 import { OnApplicationShutdown, Provider } from '@nestjs/common';
-import * as Bull from 'bull';
-import { Queue } from 'bull';
-import { BullQueueProcessor } from './bull.types';
+import { Queue } from 'bullmq';
 import {
   BullModuleAsyncOptions,
   BullModuleOptions,
 } from './interfaces/bull-module-options.interface';
 import { getQueueOptionsToken, getQueueToken } from './utils';
-import {
-  isAdvancedProcessor,
-  isAdvancedSeparateProcessor,
-  isProcessorCallback,
-  isSeparateProcessor,
-} from './utils/helpers';
 
 function buildQueue(option: BullModuleOptions): Queue {
-  const queue: Queue = new Bull(option.name ? option.name : 'default', option);
-  if (option.processors) {
-    option.processors.forEach((processor: BullQueueProcessor) => {
-      let args = [];
-      if (isAdvancedProcessor(processor)) {
-        args.push(processor.name, processor.concurrency, processor.callback);
-      } else if (isAdvancedSeparateProcessor(processor)) {
-        args.push(processor.name, processor.concurrency, processor.path);
-      } else if (isSeparateProcessor(processor)) {
-        args.push(processor);
-      } else if (isProcessorCallback(processor)) {
-        args.push(processor);
-      }
-      args = args.filter(arg => !!arg);
-      queue.process.call(queue, ...args);
-    });
-  }
-  ((queue as unknown) as OnApplicationShutdown).onApplicationShutdown = function(
+  const queue: Queue = new Queue(option.name ? option.name : 'default', option);
+  ((queue as unknown) as OnApplicationShutdown).onApplicationShutdown = function (
     this: Queue,
   ) {
     return this.close();
@@ -41,14 +17,14 @@ function buildQueue(option: BullModuleOptions): Queue {
 }
 
 export function createQueueOptionProviders(options: BullModuleOptions[]): any {
-  return options.map(option => ({
+  return options.map((option) => ({
     provide: getQueueOptionsToken(option.name),
     useValue: option,
   }));
 }
 
 export function createQueueProviders(options: BullModuleOptions[]): any {
-  return options.map(option => ({
+  return options.map((option) => ({
     provide: getQueueToken(option.name),
     useFactory: (o: BullModuleOptions) => {
       const queueName = o.name || option.name;
@@ -61,7 +37,7 @@ export function createQueueProviders(options: BullModuleOptions[]): any {
 export function createAsyncQueueOptionsProviders(
   options: BullModuleAsyncOptions[],
 ): Provider[] {
-  return options.map(option => ({
+  return options.map((option) => ({
     provide: getQueueOptionsToken(option.name),
     useFactory: option.useFactory,
     useClass: option.useClass,

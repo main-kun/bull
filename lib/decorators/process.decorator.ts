@@ -1,17 +1,17 @@
 import { SetMetadata } from '@nestjs/common';
 import { isString } from 'util';
 import { BULL_MODULE_QUEUE_PROCESS } from '../bull.constants';
+import { WorkerOptions } from 'bullmq';
 
-export interface ProcessOptions {
+export interface BullWorkerOptions extends WorkerOptions {
   name?: string;
-  concurrency?: number;
 }
 
 export function Process(): MethodDecorator;
 export function Process(name: string): MethodDecorator;
-export function Process(options: ProcessOptions): MethodDecorator;
+export function Process(options: BullWorkerOptions): MethodDecorator;
 export function Process(
-  nameOrOptions?: string | ProcessOptions,
+  nameOrOptions?: string | BullWorkerOptions,
 ): MethodDecorator {
   const options = isString(nameOrOptions)
     ? { name: nameOrOptions }

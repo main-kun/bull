@@ -1,167 +1,167 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { Queue } from 'bull';
-import { BullModule, getQueueToken } from '../lib';
+import { Queue, QueueEvents } from 'bullmq';
+import { BullModule, getQueueToken, Process, Processor } from '../lib';
+import {
+  FakeConfProcessor,
+  FakeProcessor,
+  FakeProcessorOne,
+  FakeProcessorTwo,
+} from './fake.processor';
+import { BullWorkerStore } from '../lib/bull-worker.store';
 
 describe('BullModule', () => {
   let module: TestingModule;
 
-  describe('registerQueueQueue', () => {
-    describe('single configuration', () => {
-      const fakeProcessor = jest.fn();
+  describe('registerQueue', () => {
+    describe('single configuration', function () {
       beforeAll(async () => {
         module = await Test.createTestingModule({
           imports: [
             BullModule.registerQueue({
               name: 'test',
-              redis: {
-                host: '0.0.0.0',
-                port: 6380,
-              },
-              processors: [fakeProcessor],
             }),
           ],
+          providers: [FakeProcessor],
         }).compile();
+        await module.init();
       });
-      it('should inject the queue with the given name', () => {
+      it('should inject the queue and add a worker to the worker store', () => {
         const queue: Queue = module.get<Queue>(getQueueToken('test'));
+        const workerStore = module.get<BullWorkerStore>(BullWorkerStore);
         expect(queue).toBeDefined();
-        expect(queue.name).toEqual('test');
+        expect(workerStore).toBeDefined();
+        const worker = workerStore.getWorker('FakeProcessor_process');
+        expect(worker.name).toEqual('test');
       });
     });
-    describe('multiple configuration', () => {
+    describe('multiple configurations', () => {
       beforeAll(async () => {
         module = await Test.createTestingModule({
           imports: [
-            BullModule.registerQueue(
-              {
-                name: 'test1',
-                redis: {
-                  host: '0.0.0.0',
-                  port: 6380,
-                },
-              },
-              {
-                name: 'test2',
-                redis: {
-                  host: '0.0.0.0',
-                  port: 6380,
-                },
-              },
-            ),
+            BullModule.registerQueue({ name: 'test1' }, { name: 'test2' }),
           ],
         }).compile();
       });
-      it('should inject the queue with name "test1"', () => {
+      it('should inject a queue with name test1', () => {
         const queue: Queue = module.get<Queue>(getQueueToken('test1'));
         expect(queue).toBeDefined();
         expect(queue.name).toEqual('test1');
       });
-      it('should inject the queue with name "test2"', () => {
+      it('should inject a queue with name test2', () => {
         const queue: Queue = module.get<Queue>(getQueueToken('test2'));
         expect(queue).toBeDefined();
         expect(queue.name).toEqual('test2');
       });
     });
-  });
-  describe('registerQueueAsync', () => {
-    describe('single configuration', () => {
-      describe('useFactory', () => {
-        const fakeProcessor = jest.fn();
-        beforeAll(async () => {
-          module = await Test.createTestingModule({
-            imports: [
-              BullModule.registerQueueAsync({
-                name: 'test',
-                useFactory: () => ({
-                  processors: [fakeProcessor],
-                  redis: {
-                    host: '0.0.0.0',
-                    port: 6380,
-                  },
-                }),
-              }),
-            ],
-          }).compile();
-        });
-        it('should inject the queue with the given name', () => {
-          const queue: Queue = module.get<Queue>(getQueueToken('test'));
-          expect(queue).toBeDefined();
-          expect(queue.name).toEqual('test');
-        });
-        it('the injected queue should have the given processor', () => {
-          const queue: Queue = module.get<Queue>(getQueueToken('test'));
-        });
+    describe('worker configuration from queue', () => {
+      it('single configuration', async () => {
+        module = await Test.createTestingModule({
+          imports: [
+            BullModule.registerQueue({
+              name: 'test',
+              connection: { host: '0.0.0.0', port: 6379 },
+              prefix: 'testprefix',
+            }),
+          ],
+          providers: [FakeProcessor],
+        }).compile();
+        await module.init();
+        const queue: Queue = module.get<Queue>(getQueueToken('test'));
+        expect(queue).toBeDefined();
+        expect(queue.opts.connection).toEqual({ host: '0.0.0.0', port: 6379 });
+        expect(queue.opts.prefix).toEqual('testprefix');
+        const bullWorkerStore = module.get<BullWorkerStore>(BullWorkerStore);
+        const worker = bullWorkerStore.getWorker('FakeProcessor_process');
+        expect(worker).toBeDefined();
+        expect(worker.opts.connection).toEqual({ host: '0.0.0.0', port: 6379 });
+        expect(worker.opts.prefix).toEqual('testprefix');
       });
-    });
-    describe('multiple configuration', () => {
-      describe('useFactory', () => {
-        beforeAll(async () => {
-          module = await Test.createTestingModule({
-            imports: [
-              BullModule.registerQueueAsync(
-                {
-                  name: 'test1',
-                  useFactory: () => ({
-                    redis: {
-                      host: '0.0.0.0',
-                      port: 6380,
-                    },
-                  }),
-                },
-                {
-                  name: 'test2',
-                  useFactory: () => ({
-                    redis: {
-                      host: '0.0.0.0',
-                      port: 6380,
-                    },
-                  }),
-                },
-              ),
-            ],
-          }).compile();
-        });
-        it('should inject the queue with name "test1"', () => {
-          const queue: Queue = module.get<Queue>(getQueueToken('test1'));
-          expect(queue).toBeDefined();
-          expect(queue.name).toEqual('test1');
-        });
-        it('should inject the queue with name "test2"', () => {
-          const queue: Queue = module.get<Queue>(getQueueToken('test2'));
-          expect(queue).toBeDefined();
-          expect(queue.name).toEqual('test2');
-        });
-      });
-    });
-  });
-  describe('full flow (job handling)', () => {
-    const fakeProcessor = jest.fn();
-    let testingModule: TestingModule;
 
-    beforeAll(async () => {
-      testingModule = await Test.createTestingModule({
+      it('multiple configurations', async () => {
+        module = await Test.createTestingModule({
+          imports: [
+            BullModule.registerQueue(
+              {
+                name: 'test1',
+                connection: { host: '0.0.0.0', port: 6379 },
+                prefix: 'testprefix1',
+              },
+              {
+                name: 'test2',
+                connection: { host: '127.0.0.1', port: 6380 },
+                prefix: 'testprefix2',
+              },
+            ),
+          ],
+          providers: [FakeProcessorOne, FakeProcessorTwo],
+        }).compile();
+        await module.init();
+        const queue1: Queue = module.get<Queue>(getQueueToken('test1'));
+        const queue2: Queue = module.get<Queue>(getQueueToken('test2'));
+        expect(queue1.opts.connection).toEqual({ host: '0.0.0.0', port: 6379 });
+        expect(queue2.opts.connection).toEqual({
+          host: '127.0.0.1',
+          port: 6380,
+        });
+        const bullWorkerStore = module.get<BullWorkerStore>(BullWorkerStore);
+        const workerOne = bullWorkerStore.getWorker('FakeProcessorOne_process');
+        const workerTwo = bullWorkerStore.getWorker('FakeProcessorTwo_process');
+        expect(workerOne).toBeDefined();
+        expect(workerTwo).toBeDefined();
+        expect(workerOne.opts.connection).toEqual({
+          host: '0.0.0.0',
+          port: 6379,
+        });
+        expect(workerTwo.opts.connection).toEqual({
+          host: '127.0.0.1',
+          port: 6380,
+        });
+      });
+    });
+
+    it('worker configuration overriding queue configuration', async () => {
+      module = await Test.createTestingModule({
         imports: [
           BullModule.registerQueue({
-            name: 'full_flow',
-            redis: {
-              host: '0.0.0.0',
-              port: 6380,
-            },
-            processors: [fakeProcessor],
+            name: 'testconf',
+            connection: { host: '0.0.0.0', port: 6379 },
+            prefix: 'testprefix',
           }),
         ],
+        providers: [FakeConfProcessor],
       }).compile();
+      await module.init();
+      const queue = await module.get<Queue>(getQueueToken('testconf'));
+      expect(queue.opts.connection).toEqual({ host: '0.0.0.0', port: 6379 });
+      const workerStore = module.get<BullWorkerStore>(BullWorkerStore);
+      const worker = workerStore.getWorker('FakeConfProcessor_process');
+      expect(worker.opts.connection).toEqual({ host: '127.0.0.1', port: 6380 });
     });
+  });
 
-    it('should process jobs with the given processors', async () => {
-      const queue: Queue = testingModule.get<Queue>(getQueueToken('full_flow'));
-      await queue.add(null);
-      return new Promise(resolve => {
-        setTimeout(() => {
-          expect(fakeProcessor).toHaveBeenCalledTimes(1);
-          resolve();
-        }, 1000);
-      });
+  xdescribe('jobs handling', () => {
+    let queueEvents: QueueEvents;
+    let fakeProcessor: FakeProcessor;
+    beforeAll(async () => {
+      queueEvents = new QueueEvents('test');
+      await queueEvents.waitUntilReady();
+      module = await Test.createTestingModule({
+        imports: [
+          BullModule.registerQueue({
+            name: 'test',
+          }),
+        ],
+        providers: [FakeProcessor],
+      }).compile();
+      await module.init();
+      fakeProcessor = module.get<FakeProcessor>(FakeProcessor);
+      jest.spyOn(fakeProcessor, 'process');
+    });
+    it('should call handlers to process jobs', async () => {
+      const queue = module.get<Queue>(getQueueToken('test'));
+      const job = await queue.add('jobname', { someKey: 'someValue' });
+      await job.waitUntilFinished(queueEvents);
+      expect(fakeProcessor.process).toHaveBeenCalled();
     });
   });
 });

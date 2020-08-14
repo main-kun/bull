@@ -6,7 +6,7 @@ import {
   BULL_MODULE_QUEUE_PROCESS,
 } from './bull.constants';
 import { BullQueueEventOptions } from './bull.types';
-import { ProcessOptions } from './decorators';
+import { ProcessorOptions } from './decorators';
 
 @Injectable()
 export class BullMetadataAccessor {
@@ -37,7 +37,9 @@ export class BullMetadataAccessor {
     return this.reflector.get(BULL_MODULE_QUEUE, target);
   }
 
-  getProcessMetadata(target: Type<any> | Function): ProcessOptions | undefined {
+  getProcessMetadata(
+    target: Type<any> | Function,
+  ): ProcessorOptions | undefined {
     return this.reflector.get(BULL_MODULE_QUEUE_PROCESS, target);
   }
 

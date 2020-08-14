@@ -12,6 +12,7 @@ import {
   BullOptionsFactory,
 } from './interfaces/bull-module-options.interface';
 import { getQueueOptionsToken } from './utils/get-queue-options-token.util';
+import { BullWorkerStore } from './bull-worker.store';
 
 @Module({})
 export class BullModule {
@@ -33,7 +34,7 @@ export class BullModule {
     const queueProviders = createQueueProviders(optionsArr);
     const imports = this.getUniqImports(optionsArr);
     const asyncQueueOptionsProviders = options
-      .map(queueOptions => this.createAsyncProviders(queueOptions))
+      .map((queueOptions) => this.createAsyncProviders(queueOptions))
       .reduce((a, b) => a.concat(b), []);
 
     return {
@@ -87,14 +88,15 @@ export class BullModule {
       global: true,
       module: BullModule,
       imports: [DiscoveryModule],
-      providers: [BullExplorer, BullMetadataAccessor],
+      providers: [BullExplorer, BullMetadataAccessor, BullWorkerStore],
+      exports: [BullWorkerStore],
     };
   }
 
   private static getUniqImports(options: BullModuleAsyncOptions[]) {
     return (
       options
-        .map(option => option.imports)
+        .map((option) => option.imports)
         .reduce((acc, i) => acc.concat(i || []), [])
         .filter((v, i, a) => a.indexOf(v) === i) || []
     );
