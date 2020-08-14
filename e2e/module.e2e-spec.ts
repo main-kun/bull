@@ -139,29 +139,32 @@ describe('BullModule', () => {
     });
   });
 
-  xdescribe('jobs handling', () => {
+  describe('jobs handling', () => {
+    // FulLTestProcessor is calling TestService.testFunc inside @Process
+    // The test is set up this way because jest could not hook a spy correctly to processor.process
+    // So the Processor.process function would get called however the spy would not mark those calls
     let queueEvents: QueueEvents;
-    let fakeProcessor: FakeProcessor;
+    let testService: TestService;
     beforeAll(async () => {
-      queueEvents = new QueueEvents('test');
+      queueEvents = new QueueEvents('fulltest');
       await queueEvents.waitUntilReady();
       module = await Test.createTestingModule({
         imports: [
           BullModule.registerQueue({
-            name: 'test',
+            name: 'fulltest',
           }),
         ],
-        providers: [FakeProcessor],
+        providers: [FullTestProcessor, TestService],
       }).compile();
       await module.init();
-      fakeProcessor = module.get<FakeProcessor>(FakeProcessor);
-      jest.spyOn(fakeProcessor, 'process');
+      testService = module.get<TestService>(TestService);
+      jest.spyOn(testService, 'testFunc');
     });
     it('should call handlers to process jobs', async () => {
-      const queue = module.get<Queue>(getQueueToken('test'));
+      const queue = module.get<Queue>(getQueueToken('fulltest'));
       const job = await queue.add('jobname', { someKey: 'someValue' });
       await job.waitUntilFinished(queueEvents);
-      expect(fakeProcessor.process).toHaveBeenCalled();
+      expect(testService.testFunc).toHaveBeenCalled();
     });
   });
 });

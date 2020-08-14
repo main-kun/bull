@@ -31,3 +31,19 @@ export class FakeConfProcessor {
     return Promise.resolve();
   }
 }
+@Injectable()
+export class TestService {
+  testFunc() {
+    return 'test';
+  }
+}
+
+@Processor('fulltest')
+export class FullTestProcessor {
+  constructor(private readonly testService: TestService) {}
+
+  @Process()
+  async process() {
+    return Promise.resolve(this.testService.testFunc());
+  }
+}
