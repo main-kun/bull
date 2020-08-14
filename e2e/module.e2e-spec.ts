@@ -1,11 +1,13 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { Queue, QueueEvents } from 'bullmq';
-import { BullModule, getQueueToken, Process, Processor } from '../lib';
+import { BullModule, getQueueToken } from '../lib';
 import {
   FakeConfProcessor,
   FakeProcessor,
   FakeProcessorOne,
   FakeProcessorTwo,
+  FullTestProcessor,
+  TestService,
 } from './fake.processor';
 import { BullWorkerStore } from '../lib/bull-worker.store';
 
@@ -59,7 +61,7 @@ describe('BullModule', () => {
           imports: [
             BullModule.registerQueue({
               name: 'test',
-              connection: { host: '0.0.0.0', port: 6379 },
+              connection: { host: '0.0.0.0' },
               prefix: 'testprefix',
             }),
           ],
@@ -68,12 +70,12 @@ describe('BullModule', () => {
         await module.init();
         const queue: Queue = module.get<Queue>(getQueueToken('test'));
         expect(queue).toBeDefined();
-        expect(queue.opts.connection).toEqual({ host: '0.0.0.0', port: 6379 });
+        expect(queue.opts.connection).toEqual({ host: '0.0.0.0' });
         expect(queue.opts.prefix).toEqual('testprefix');
         const bullWorkerStore = module.get<BullWorkerStore>(BullWorkerStore);
         const worker = bullWorkerStore.getWorker('FakeProcessor_process');
         expect(worker).toBeDefined();
-        expect(worker.opts.connection).toEqual({ host: '0.0.0.0', port: 6379 });
+        expect(worker.opts.connection).toEqual({ host: '0.0.0.0' });
         expect(worker.opts.prefix).toEqual('testprefix');
       });
 
@@ -83,12 +85,12 @@ describe('BullModule', () => {
             BullModule.registerQueue(
               {
                 name: 'test1',
-                connection: { host: '0.0.0.0', port: 6379 },
+                connection: { host: '0.0.0.0' },
                 prefix: 'testprefix1',
               },
               {
                 name: 'test2',
-                connection: { host: '127.0.0.1', port: 6380 },
+                connection: { host: '127.0.0.1' },
                 prefix: 'testprefix2',
               },
             ),
@@ -98,10 +100,9 @@ describe('BullModule', () => {
         await module.init();
         const queue1: Queue = module.get<Queue>(getQueueToken('test1'));
         const queue2: Queue = module.get<Queue>(getQueueToken('test2'));
-        expect(queue1.opts.connection).toEqual({ host: '0.0.0.0', port: 6379 });
+        expect(queue1.opts.connection).toEqual({ host: '0.0.0.0' });
         expect(queue2.opts.connection).toEqual({
           host: '127.0.0.1',
-          port: 6380,
         });
         const bullWorkerStore = module.get<BullWorkerStore>(BullWorkerStore);
         const workerOne = bullWorkerStore.getWorker('FakeProcessorOne_process');
@@ -110,11 +111,9 @@ describe('BullModule', () => {
         expect(workerTwo).toBeDefined();
         expect(workerOne.opts.connection).toEqual({
           host: '0.0.0.0',
-          port: 6379,
         });
         expect(workerTwo.opts.connection).toEqual({
           host: '127.0.0.1',
-          port: 6380,
         });
       });
     });
@@ -124,7 +123,7 @@ describe('BullModule', () => {
         imports: [
           BullModule.registerQueue({
             name: 'testconf',
-            connection: { host: '0.0.0.0', port: 6379 },
+            connection: { host: '0.0.0.0' },
             prefix: 'testprefix',
           }),
         ],
@@ -132,10 +131,10 @@ describe('BullModule', () => {
       }).compile();
       await module.init();
       const queue = await module.get<Queue>(getQueueToken('testconf'));
-      expect(queue.opts.connection).toEqual({ host: '0.0.0.0', port: 6379 });
+      expect(queue.opts.connection).toEqual({ host: '0.0.0.0' });
       const workerStore = module.get<BullWorkerStore>(BullWorkerStore);
       const worker = workerStore.getWorker('FakeConfProcessor_process');
-      expect(worker.opts.connection).toEqual({ host: '127.0.0.1', port: 6380 });
+      expect(worker.opts.connection).toEqual({ host: '127.0.0.1' });
     });
   });
 

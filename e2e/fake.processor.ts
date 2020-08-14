@@ -1,4 +1,5 @@
 import { Processor, Process } from '../lib/decorators';
+import { Injectable } from '@nestjs/common';
 
 @Processor('test')
 export class FakeProcessor {
@@ -26,7 +27,7 @@ export class FakeProcessorTwo {
 
 @Processor('testconf')
 export class FakeConfProcessor {
-  @Process({ connection: { host: '127.0.0.1', port: 6380 } })
+  @Process({ connection: { host: '127.0.0.1' } })
   process() {
     return Promise.resolve();
   }
